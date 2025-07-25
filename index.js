@@ -6,7 +6,6 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ HTTP server for uptime
 app.get("/", (req, res) => {
   res.send("✅ Facebook Bot is active and running...");
 });
@@ -14,18 +13,15 @@ app.listen(PORT, () => {
   console.log(`🌐 HTTP server live on port ${PORT}`);
 });
 
-// ✅ Appstate Login
+// ✅ Only this UID can use admin commands
+const BOSS_UID = "61577927253024"; // 👑 Your UID
+
 const appState = JSON.parse(fs.readFileSync("appstate.json", "utf-8"));
 
-const BOSS_UID = "100052951819398"; // 👑 Your UID
 let GROUP_THREAD_ID = null;
 let LOCKED_GROUP_NAME = null;
-let GROUP_LOCK_ENABLED = false;
-
-let NICKNAME_LOCK_ENABLED = false;
-let USER_NICKNAMES = {};
-
-const PREFIX = "/";
+let nickLockEnabled = false;
+let originalNicknames = {};
 
 login({ appState }, (err, api) => {
   if (err) return console.error("❌ Login failed:", err);
@@ -36,87 +32,81 @@ login({ appState }, (err, api) => {
   api.listenMqtt(async (err, event) => {
     if (err) return console.error("❌ Listen error:", err);
 
-    // ✅ Handle Group Lock ON/OFF
-    if (event.type === "message" && event.body?.toLowerCase().startsWith(`${PREFIX}gclock`)) {
-      if (event.senderID !== BOSS_UID)
-        return api.sendMessage("❌ Permission denied. Only boss can use this command.", event.threadID);
+    const senderID = event.senderID;
+    const threadID = event.threadID;
+    const body = (event.body || "").toLowerCase();
 
-      const threadID = event.threadID;
-      const args = event.body.toLowerCase().split(" ");
-      const subcmd = args[1];
-
-      if (subcmd === "on") {
+    // 🔒 Group name lock command
+    if (event.type === "message" && body === "/gclock") {
+      if (senderID !== BOSS_UID) {
+        return api.sendMessage("⛔ Permission Denied: Only boss can use this command.", threadID);
+      }
+      try {
         const info = await api.getThreadInfo(threadID);
         GROUP_THREAD_ID = threadID;
         LOCKED_GROUP_NAME = info.name;
-        GROUP_LOCK_ENABLED = true;
 
-        api.sendMessage(`🔒 Group name locked as: "${LOCKED_GROUP_NAME}" ✅`, threadID);
-      } else if (subcmd === "off") {
-        GROUP_LOCK_ENABLED = false;
-        api.sendMessage(`🔓 Group name lock disabled.`, threadID);
-      } else {
-        api.sendMessage(`📌 Usage:\n${PREFIX}gclock on - Lock group name\n${PREFIX}gclock off - Unlock`, threadID);
+        api.sendMessage(`🔒 Group name locked as: "${LOCKED_GROUP_NAME}"`, threadID);
+      } catch (e) {
+        api.sendMessage("❌ Failed to lock group name. Try again later.", threadID);
+        console.error("Lock error:", e);
       }
     }
 
-    // 🔁 Group name revert
-    if (event.logMessageType === "log:thread-name" && GROUP_LOCK_ENABLED && event.threadID === GROUP_THREAD_ID) {
-      const changedName = event.logMessageData?.name || "(unknown)";
+    // 🔁 Group name revert if changed
+    if (event.logMessageType === "log:thread-name" && event.threadID === GROUP_THREAD_ID) {
+      const changedName = event.logMessageData.name;
       if (LOCKED_GROUP_NAME && changedName !== LOCKED_GROUP_NAME) {
         try {
           await api.setTitle(LOCKED_GROUP_NAME, GROUP_THREAD_ID);
           api.sendMessage(`⚠️ Group name changed to "${changedName}". Reverting to "${LOCKED_GROUP_NAME}" ✅`, GROUP_THREAD_ID);
-          console.log("🔁 Group name reverted.");
         } catch (e) {
-          api.sendMessage(`❌ Failed to revert group name.\n📌 Reason: Not admin or Facebook blocked the action.`, GROUP_THREAD_ID);
-          console.error("Revert failed:", e);
+          api.sendMessage(`❌ Couldn't revert group name to "${LOCKED_GROUP_NAME}". Bot may not be admin.`, GROUP_THREAD_ID);
         }
       }
     }
 
-    // ✅ Nickname Lock ON/OFF
-    if (event.type === "message" && event.body?.toLowerCase().startsWith(`${PREFIX}nicklock`)) {
-      if (event.senderID !== BOSS_UID)
-        return api.sendMessage("❌ Permission denied. Only boss can use this command.", event.threadID);
-
-      const threadID = event.threadID;
-      const args = event.body.toLowerCase().split(" ");
-      const subcmd = args[1];
-
-      if (subcmd === "on") {
-        const info = await api.getThreadInfo(threadID);
-        USER_NICKNAMES = {};
-        for (let user of info.userInfo) {
-          if (user.nickname) USER_NICKNAMES[user.id] = user.nickname;
-        }
-        NICKNAME_LOCK_ENABLED = true;
-        api.sendMessage(`🔒 Nickname lock enabled.`, threadID);
-      } else if (subcmd === "off") {
-        NICKNAME_LOCK_ENABLED = false;
-        api.sendMessage(`🔓 Nickname lock disabled.`, threadID);
-      } else {
-        api.sendMessage(`📌 Usage:\n${PREFIX}nicklock on - Lock nicknames\n${PREFIX}nicklock off - Unlock`, threadID);
+    // 🧑‍🔒 Nickname lock ON/OFF
+    if (event.type === "message" && body === "/nicklock on") {
+      if (senderID !== BOSS_UID) {
+        return api.sendMessage("⛔ Permission Denied: Only boss can use this command.", threadID);
+      }
+      try {
+        const threadInfo = await api.getThreadInfo(threadID);
+        originalNicknames = {};
+        threadInfo.userInfo.forEach(user => {
+          originalNicknames[user.id] = user.nickname || "";
+        });
+        nickLockEnabled = true;
+        api.sendMessage("🔐 Nickname lock is now ON.", threadID);
+      } catch (err) {
+        api.sendMessage("❌ Failed to enable nickname lock.", threadID);
       }
     }
 
-    // 🔁 Nickname revert
-    if (event.logMessageType === "log:user-nickname" && NICKNAME_LOCK_ENABLED) {
-      const userID = event.logMessageData.participant_id;
+    if (event.type === "message" && body === "/nicklock off") {
+      if (senderID !== BOSS_UID) {
+        return api.sendMessage("⛔ Permission Denied: Only boss can use this command.", threadID);
+      }
+      nickLockEnabled = false;
+      originalNicknames = {};
+      api.sendMessage("🔓 Nickname lock is now OFF.", threadID);
+    }
+
+    // 🔁 Restore nicknames if changed
+    if (nickLockEnabled && event.logMessageType === "log:user-nickname") {
+      const changedUID = event.logMessageData.participant_id;
       const newNick = event.logMessageData.nickname;
-      const originalNick = USER_NICKNAMES[userID];
+      const originalNick = originalNicknames[changedUID];
 
-      if (originalNick && newNick !== originalNick) {
+      if (originalNick !== undefined && newNick !== originalNick) {
         try {
-          await api.setNickname(originalNick, event.threadID, userID);
-          api.sendMessage(`⚠️ Nickname changed to "${newNick}". Reverting to "${originalNick}" ✅`, event.threadID);
-          console.log("🔁 Nickname reverted.");
-        } catch (e) {
-          api.sendMessage(`❌ Failed to revert nickname.\n📌 Reason: Not admin or permission denied.`, event.threadID);
-          console.error("Nickname revert failed:", e);
+          await api.changeNickname(originalNick, threadID, changedUID);
+          console.log(`🔁 Nickname reverted for UID ${changedUID}`);
+        } catch (err) {
+          console.error("❌ Failed to revert nickname:", err);
         }
       }
     }
-
   });
 });
