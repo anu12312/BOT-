@@ -17,7 +17,7 @@ app.listen(PORT, () => {
 // ✅ Appstate Login
 const appState = JSON.parse(fs.readFileSync("appstate.json", "utf-8"));
 
-const BOSS_UID = "100007792156974"; // 👑 Your UID
+const BOSS_UID = "100052951819398"; // 👑 Your UID
 let GROUP_THREAD_ID = null;
 let LOCKED_GROUP_NAME = null;
 let GROUP_LOCK_ENABLED = false;
