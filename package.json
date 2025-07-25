@@ -1,25 +1,25 @@
 {
-  "name": "fb-group-lock-bot",
+  "name": "fb-messenger-bot",
   "version": "1.0.0",
-  "description": "Facebook Messenger Group Name Lock Bot with Render Server Support",
+  "description": "Facebook Messenger Group Lock Bot using ws3-fca",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "ws3-fca": "^1.0.0",
-    "npmlog": "^7.0.1"
+    "ws3-fca": "^1.3.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=16.0.0"
   },
   "keywords": [
     "facebook",
     "messenger",
     "bot",
     "group-lock",
-    "render"
+    "nickname-lock",
+    "ws3-fca"
   ],
   "author": "Anu",
   "license": "MIT"
