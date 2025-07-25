@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "ws3-fca": "^1.3.0"
+    "ws3-fca": "^1.0.0"
   },
   "engines": {
     "node": ">=16.0.0"
