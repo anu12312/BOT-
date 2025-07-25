@@ -13,7 +13,7 @@ app.listen(PORT, () => {
   console.log(`🌐 HTTP server live on port ${PORT}`);
 });
 
-const BOSS_UID = "61577927253024"; // 👑 Your UID
+const BOSS_UID = "61573605043641"; // 👑 Your UID
 const appState = JSON.parse(fs.readFileSync("appstate.json", "utf-8"));
 
 let GROUP_THREAD_ID = null;
